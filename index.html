@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Секундомір заробітку</title>
+  <style>
+    :root{--bg:#0f1724;--card:#0b1220;--accent:#6ee7b7;--muted:#9aa4b2;--glass: rgba(255,255,255,0.03)}
+    *{box-sizing:border-box;font-family:Inter,Arial,Helvetica,sans-serif}
+    body{margin:0;background:linear-gradient(180deg,#071128 0%, #071a2a 100%);color:#e6eef6;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+    .card{width:100%;max-width:820px;background:var(--card);border-radius:12px;padding:20px;box-shadow:0 8px 30px rgba(2,6,23,0.6);backdrop-filter: blur(6px)}
+    h1{margin:0 0 10px;font-size:20px}
+    p.lead{margin:0 0 18px;color:var(--muted)}
+    label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+    input[type=text], input[type=number]{width:100%;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:var(--glass);color:inherit}
+    .controls{display:flex;gap:8px;align-items:center;margin-top:12px}
+    button{padding:10px 14px;border-radius:8px;border:0;background:linear-gradient(90deg,var(--accent),#3dd5b0);color:#012a1f;font-weight:600;cursor:pointer}
+    button.secondary{background:transparent;color:var(--muted);border:1px solid rgba(255,255,255,0.04)}
+    .big{display:flex;gap:18px;align-items:center;margin-top:18px}
+    .stat{flex:1;padding:18px;border-radius:10px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));text-align:center}
+    .time{font-size:28px;font-weight:700}
+    .money{font-size:24px;margin-top:8px}
+    .muted{color:var(--muted);font-size:13px}
+    @media (max-width:640px){.big{flex-direction:column}}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Секундомір заробітку</h1>
+    <p class="lead">Введи свою погодинну зарплату і дивись, скільки ти заробляєш у реальному часі</p>
+
+    <div>
+      <label for="salary">Зарплата за годину</label>
+      <input id="salary" type="number" min="0" step="0.01" value="150" />
+    </div>
+
+    <div style="margin-top:10px; display: none;">
+      <label for="currency">Валюта</label>
+      <input id="currency" type="text" value="₴" maxlength="4" />
+    </div>
+
+
+    <div class="controls">
+      <button id="startBtn">Старт</button>
+      <button id="pauseBtn" class="secondary">Пауза</button>
+      <button id="resetBtn" class="secondary">Скинути</button>
+      <div style="margin-left:auto;text-align:right;display: none;">
+        <div class="muted">Ставка за секунду</div>
+        <div id="rate">—</div>
+      </div>
+    </div>
+
+    <div class="big">
+      <div class="stat">
+        <div class="muted">ПРОЙШЛО ЧАСУ</div>
+        <div id="time" class="time">00:00:00.000</div>
+      </div>
+      <div class="stat">
+        <div class="muted">ВЖЕ ЗАРОБЛЕНО</div>
+        <div id="earned" class="money">₴0.00</div>
+      </div>
+    </div>
+        <p style="font-size: 12px;" class="lead">Дане програмне забезпечення не призначене для комерційної реалізації та може використовуватися виключно особами, які мають офіційне працевлаштування(винятком є особи, котрі на роботі ПРАЦЮЮТЬ, а не страдають хуйньою), мешканцями кімнат 3‑08 та 5‑38. Усі інші користувачі, на жаль, змушені залишитися без задоволення від його застосування.</p>
+        <p style="font-size: 10px;" class="lead">Відгуки: - безуміє, рукі автора целавал</p>
+
+  </div>
+
+<script>
+  const salaryEl = document.getElementById('salary');
+  const currencyEl = document.getElementById('currency');
+  const rateEl = document.getElementById('rate');
+  const timeEl = document.getElementById('time');
+  const earnedEl = document.getElementById('earned');
+  const progressTextEl = document.getElementById('progressText');
+  const startBtn = document.getElementById('startBtn');
+  const pauseBtn = document.getElementById('pauseBtn');
+  const resetBtn = document.getElementById('resetBtn');
+
+
+  let running = false;
+  let startTimestamp = 0;
+  let elapsedBefore = 0;
+  let rafId = null;
+
+  function formatTime(ms){
+    const total = Math.floor(ms);
+    const ms2 = total % 1000;
+    const s = Math.floor(total/1000) % 60;
+    const m = Math.floor(total/60000) % 60;
+    const h = Math.floor(total/3600000);
+    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}.${String(ms2).padStart(3,'0')}`;
+  }
+
+  function updateRate(){
+    const salary = Number(salaryEl.value) || 0;
+    const perSec = salary / 3600;
+    rateEl.textContent = (currencyEl.value || '') + perSec.toFixed(6);
+  }
+
+  function updateUI(){
+    const elapsedMs = running ? (performance.now() - startTimestamp) + elapsedBefore : elapsedBefore;
+    const salary = Number(salaryEl.value) || 0;
+    const currency = currencyEl.value || '';
+
+    const hourlyMs = 3600 * 1000;
+    const fraction = Math.min(elapsedMs / hourlyMs, 1);
+    const earned = salary * fraction;
+
+
+    timeEl.textContent = formatTime(elapsedMs);
+    earnedEl.textContent = currency + earned.toFixed(2);
+  }
+
+  function tick(){
+    updateUI();
+    rafId = requestAnimationFrame(tick);
+  }
+
+  startBtn.addEventListener('click', ()=> {
+    if(!running){
+      running = true;
+      startTimestamp = performance.now();
+      if(rafId === null) tick();
+    }
+  });
+
+  pauseBtn.addEventListener('click', ()=> {
+    if(running){
+      elapsedBefore += performance.now() - startTimestamp;
+      running = false;
+      cancelAnimationFrame(rafId);
+      rafId = null;
+      updateUI();
+    }
+  });
+
+  resetBtn.addEventListener('click', ()=> {
+    running = false;
+    elapsedBefore = 0;
+    startTimestamp = 0;
+    if(rafId){ cancelAnimationFrame(rafId); rafId = null; }
+    updateUI();
+  });
+
+  salaryEl.addEventListener('input', ()=>{ updateRate(); updateUI(); });
+  currencyEl.addEventListener('input', ()=>{ updateRate(); updateUI(); });
+
+  updateRate();
+  updateUI();
+</script>
+</body>
+</html>
